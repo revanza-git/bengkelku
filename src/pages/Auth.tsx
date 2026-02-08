@@ -76,7 +76,7 @@ export default function Auth() {
     <div className="min-h-screen flex items-center justify-center bg-muted/50 p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle className="text-2xl">PartFlow ERP</CardTitle>
+          <CardTitle className="text-2xl">Bengkelku ERP</CardTitle>
           <CardDescription>Sign in to your account or create a new one</CardDescription>
         </CardHeader>
         <CardContent>

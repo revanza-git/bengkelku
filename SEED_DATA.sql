@@ -1,4 +1,4 @@
--- PartFlow ERP Seed Data
+-- Bengkelku ERP Seed Data
 -- Run this SQL in Supabase SQL Editor: https://supabase.com/dashboard/project/dgijkdszschdztbnbbpg/sql/new
 
 -- Insert demo organization

@@ -160,7 +160,7 @@ Key backend modules:
 ### 7.1 Backend (`apps/api/.env`)
 
 ```env
-DATABASE_URL=postgresql://partflow:partflow@localhost:5432/partflow?schema=public
+DATABASE_URL=postgresql://bengkelku:bengkelku@localhost:5432/bengkelku?schema=public
 PORT=3001
 CORS_ORIGINS=http://localhost:5173,http://localhost:8080
 JWT_ACCESS_SECRET=dev-access-secret
@@ -188,7 +188,7 @@ Feature flags:
 ## 8.1 Option A (recommended): Full Docker dev stack
 
 ```bash
-docker-compose -f docker-compose.dev.yml up --build
+docker compose -f docker-compose.dev.yml up --build
 ```
 
 Services:
@@ -199,15 +199,17 @@ Services:
 If web image gets dependency issues, reset volumes and rebuild:
 
 ```bash
-docker-compose -f docker-compose.dev.yml down -v
-docker-compose -f docker-compose.dev.yml up --build
+docker compose -f docker-compose.dev.yml down -v
+docker compose -f docker-compose.dev.yml up --build
 ```
+
+Compose project name is pinned to `bengkelku` in both compose files, so Docker Desktop groups services consistently.
 
 ## 8.2 Option B: Hybrid local (DB in Docker, API/Web on host)
 
 1. Start DB only:
 ```bash
-docker-compose -f docker-compose.dev.yml up db -d
+docker compose -f docker-compose.dev.yml up db -d
 ```
 
 2. API:
@@ -240,13 +242,13 @@ Two seed files are provided:
 ### 9.1 Apply MVP seed (PowerShell)
 
 ```powershell
-Get-Content -Raw SEED_MVP_DEMO.sql | docker exec -i partflow-db-dev psql -U partflow -d partflow
+Get-Content -Raw SEED_MVP_DEMO.sql | docker exec -i bengkelku-db-dev psql -U bengkelku -d bengkelku
 ```
 
 ### 9.2 Apply MVP seed (bash)
 
 ```bash
-cat SEED_MVP_DEMO.sql | docker exec -i partflow-db-dev psql -U partflow -d partflow
+cat SEED_MVP_DEMO.sql | docker exec -i bengkelku-db-dev psql -U bengkelku -d bengkelku
 ```
 
 ### 9.3 Verify reorder candidates quickly
@@ -280,7 +282,7 @@ POST /api/auth/register
 ```
 
 For existing local setups, a previously created superadmin may exist:
-- `superadmin@partflow.local`
+- `superadmin@bengkelku.local`
 
 (Password depends on your local seed/manual setup history.)
 

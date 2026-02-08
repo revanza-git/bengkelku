@@ -3,7 +3,7 @@ INSERT INTO public.orgs (id, name)
 VALUES ('00000000-0000-0000-0000-000000000001', 'Demo Organization')
 ON CONFLICT (id) DO NOTHING;
 
--- PartFlow ERP Seed Data
+-- Bengkelku ERP Seed Data
 -- Run this SQL in Supabase SQL Editor: https://supabase.com/dashboard/project/dgijkdszschdztbnbbpg/sql/new
 
 -- Insert demo organization

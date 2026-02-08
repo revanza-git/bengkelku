@@ -1,16 +1,18 @@
+name: bengkelku
+
 services:
   db:
     image: postgres:15
-    container_name: partflow-db
+    container_name: bengkelku-db
     environment:
-      POSTGRES_USER: partflow
-      POSTGRES_PASSWORD: partflow
-      POSTGRES_DB: partflow
+      POSTGRES_USER: bengkelku
+      POSTGRES_PASSWORD: bengkelku
+      POSTGRES_DB: bengkelku
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./docker/db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U partflow -d partflow"]
+      test: ["CMD-SHELL", "pg_isready -U bengkelku -d bengkelku"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -20,11 +22,11 @@ services:
       context: ./apps/api
       dockerfile: Dockerfile
       target: prod
-    container_name: partflow-api
+    container_name: bengkelku-api
     environment:
       NODE_ENV: production
       PORT: 3001
-      DATABASE_URL: postgresql://partflow:partflow@db:5432/partflow?schema=public
+      DATABASE_URL: postgresql://bengkelku:bengkelku@db:5432/bengkelku?schema=public
       JWT_ACCESS_SECRET: change-me
       JWT_REFRESH_SECRET: change-me
       JWT_ACCESS_TTL: 900s
@@ -42,7 +44,7 @@ services:
       dockerfile: Dockerfile.web
       args:
         VITE_API_URL: /api
-    container_name: partflow-web
+    container_name: bengkelku-web
     depends_on:
       - api
     ports:
