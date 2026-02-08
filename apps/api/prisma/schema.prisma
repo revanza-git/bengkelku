@@ -1,0 +1,570 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["public", "auth"]
+}
+
+// Enums
+enum app_role {
+  admin
+  storekeeper
+  technician
+  procurement
+  warehouse
+  finance
+  viewer
+
+  @@schema("public")
+}
+
+enum po_status {
+  draft
+  submitted
+  approved
+  reserved
+  pending
+  partial_delivery
+  delivered
+  closed
+  cancelled
+
+  @@schema("public")
+}
+
+enum delivery_status {
+  draft
+  confirmed
+  delivered
+
+  @@schema("public")
+}
+
+enum invoice_status {
+  open
+  partial
+  paid
+  overdue
+  written_off
+  cancelled
+
+  @@schema("public")
+}
+
+enum trx_type {
+  GRN
+  SHIP_PO
+  ADJ_PLUS  @map("ADJ+")
+  ADJ_MINUS @map("ADJ-")
+  TRANSFER
+
+  @@schema("public")
+}
+
+enum cashflow_type {
+  cash_in
+  cash_out
+
+  @@schema("public")
+}
+
+enum cashflow_status {
+  planned
+  paid
+
+  @@schema("public")
+}
+
+// Auth schema tables
+model auth_users {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email              String   @unique
+  encrypted_password String?
+  created_at         DateTime @default(now())
+  updated_at         DateTime @default(now())
+
+  public_users public_users?
+
+  @@map("users")
+  @@schema("auth")
+}
+
+// Public schema tables
+model orgs {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name       String
+  created_at DateTime @default(now())
+
+  public_users        public_users[]
+  customers           customers[]
+  suppliers           suppliers[]
+  warehouses          warehouses[]
+  items               items[]
+  tax_codes           tax_codes[]
+  purchase_orders     purchase_orders[]
+  delivery_orders     delivery_orders[]
+  invoices            invoices[]
+  payments            payments[]
+  reservations        reservations[]
+  gl_accounts         gl_accounts[]
+  journal_entries     journal_entries[]
+  cashflow_entries    cashflow_entries[]
+  expense_types       expense_types[]
+  account_settings    account_settings[]
+  audit_logs          audit_logs[]
+
+  @@schema("public")
+}
+
+model public_users {
+  id         String    @id @db.Uuid
+  org_id     String    @db.Uuid
+  email      String    @unique
+  full_name  String?
+  role       app_role  @default(viewer)
+  created_at DateTime  @default(now())
+
+  auth_user auth_users @relation(fields: [id], references: [id], onDelete: Cascade)
+  orgs      orgs       @relation(fields: [org_id], references: [id])
+  cashflow_entries cashflow_entries[] @relation("CashflowCreatedBy")
+
+  @@map("users")
+  @@schema("public")
+}
+
+model customers {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id     String   @db.Uuid
+  name       String
+  phone      String?
+  email      String?
+  tax_id     String?
+  address    String?
+  created_at DateTime @default(now())
+
+  orgs            orgs              @relation(fields: [org_id], references: [id])
+  purchase_orders purchase_orders[]
+  delivery_orders delivery_orders[]
+  invoices        invoices[]
+
+  @@schema("public")
+}
+
+model suppliers {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id         String   @db.Uuid
+  name           String
+  phone          String?
+  email          String?
+  address        String?
+  lead_time_days Int?
+  npwp           String?
+  created_at     DateTime @default(now())
+
+  orgs            orgs              @relation(fields: [org_id], references: [id])
+  purchase_orders purchase_orders[]
+
+  @@schema("public")
+}
+
+model warehouses {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id     String   @db.Uuid
+  name       String
+  code       String
+  created_at DateTime @default(now())
+
+  orgs                   orgs                     @relation(fields: [org_id], references: [id])
+  bins                   bins[]
+  inventory_transactions inventory_transactions[]
+  reservations           reservations[]
+  delivery_order_lines   delivery_order_lines[]
+
+  @@schema("public")
+}
+
+model bins {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  warehouse_id String   @db.Uuid
+  code         String
+  created_at   DateTime @default(now())
+
+  warehouses warehouses @relation(fields: [warehouse_id], references: [id])
+
+  @@schema("public")
+}
+
+model items {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id     String   @db.Uuid
+  sku        String
+  name       String
+  uom        String   @default("unit")
+  base_cost  Decimal  @default(0) @db.Decimal(18, 4)
+  is_stock   Boolean  @default(true)
+  category   String?
+  min_stock  Decimal? @default(0) @db.Decimal(18, 4)
+  reorder_point Decimal? @default(0) @db.Decimal(18, 4)
+  tax_code_id String? @db.Uuid
+  sale_price Decimal? @db.Decimal(18, 4) @ignore
+  created_at DateTime @default(now())
+
+  orgs                   orgs                     @relation(fields: [org_id], references: [id])
+  tax_codes              tax_codes?               @relation("ItemTaxCode", fields: [tax_code_id], references: [id])
+  po_lines               po_lines[]
+  delivery_order_lines   delivery_order_lines[]
+  invoice_lines          invoice_lines[]
+  inventory_transactions inventory_transactions[]
+  reservations           reservations[]
+
+  @@unique([org_id, sku])
+  @@schema("public")
+}
+
+model tax_codes {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id     String   @db.Uuid
+  code       String
+  rate       Decimal  @db.Decimal(5, 4)
+  label      String?
+  created_at DateTime @default(now())
+
+  orgs          orgs            @relation(fields: [org_id], references: [id])
+  invoice_lines invoice_lines[]
+  items         items[] @relation("ItemTaxCode")
+
+  @@unique([org_id, code])
+  @@schema("public")
+}
+
+model purchase_orders {
+  id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id                 String    @db.Uuid
+  supplier_id            String    @db.Uuid
+  customer_id            String?   @db.Uuid
+  status                 po_status? @default(draft)
+  eta_date               DateTime?
+  created_by             String    @db.Uuid
+  created_at             DateTime  @default(now())
+  po_number              String?
+  approved_by            String?   @db.Uuid
+  approved_at            DateTime?
+  planned_delivery_start DateTime?
+  actual_delivery_date   DateTime?
+  currency               String    @default("IDR")
+  notes                  String?
+  is_deleted             Boolean   @default(false)
+  deleted_at             DateTime?
+
+  orgs            orgs              @relation(fields: [org_id], references: [id])
+  suppliers       suppliers         @relation(fields: [supplier_id], references: [id])
+  customers       customers?        @relation(fields: [customer_id], references: [id])
+  po_lines        po_lines[]
+  delivery_orders delivery_orders[]
+  invoices        invoices[]
+
+  @@schema("public")
+}
+
+model po_lines {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id            String   @db.Uuid
+  purchase_order_id String   @db.Uuid
+  item_id           String   @db.Uuid
+  qty               Decimal  @db.Decimal(18, 4)
+  unit_cost         Decimal  @db.Decimal(18, 4)
+  created_at        DateTime @default(now())
+
+  purchase_orders      purchase_orders        @relation(fields: [purchase_order_id], references: [id], onDelete: Cascade)
+  items                items                  @relation(fields: [item_id], references: [id])
+  delivery_order_lines delivery_order_lines[]
+
+  @@schema("public")
+}
+
+model delivery_orders {
+  id                   String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id               String           @db.Uuid
+  purchase_order_id    String           @db.Uuid
+  customer_id          String?          @db.Uuid
+  delivery_number      String
+  status               delivery_status? @default(draft)
+  delivery_date        DateTime
+  actual_delivery_date DateTime?
+  notes                String?
+  created_by           String           @db.Uuid
+  created_at           DateTime         @default(now())
+
+  orgs                 orgs                   @relation(fields: [org_id], references: [id])
+  purchase_orders      purchase_orders        @relation(fields: [purchase_order_id], references: [id])
+  customers            customers?             @relation(fields: [customer_id], references: [id])
+  delivery_order_lines delivery_order_lines[]
+  delivery_expenses    delivery_expenses[]
+
+  @@schema("public")
+}
+
+model delivery_order_lines {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id            String   @db.Uuid
+  delivery_order_id String   @db.Uuid
+  po_line_id        String?  @db.Uuid
+  item_id           String   @db.Uuid
+  qty_ordered       Decimal  @db.Decimal(18, 4)
+  qty_delivered     Decimal  @db.Decimal(18, 4)
+  warehouse_id      String   @db.Uuid
+  created_at        DateTime @default(now())
+
+  delivery_orders delivery_orders @relation(fields: [delivery_order_id], references: [id], onDelete: Cascade)
+  po_lines        po_lines?       @relation(fields: [po_line_id], references: [id])
+  items           items           @relation(fields: [item_id], references: [id])
+  warehouses      warehouses      @relation(fields: [warehouse_id], references: [id])
+
+  @@schema("public")
+}
+
+model invoices {
+  id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id            String          @db.Uuid
+  customer_id       String          @db.Uuid
+  source_type       String?
+  source_id         String?         @db.Uuid
+  status            invoice_status? @default(open)
+  subtotal          Decimal         @default(0) @db.Decimal(18, 2)
+  tax_total         Decimal         @default(0) @db.Decimal(18, 2)
+  grand_total       Decimal         @default(0) @db.Decimal(18, 2)
+  issued_at         DateTime        @default(now())
+  due_at            DateTime?
+  purchase_order_id String?         @db.Uuid
+  invoice_number    String?
+  attachment_url    String?
+
+  orgs                orgs                  @relation(fields: [org_id], references: [id])
+  purchase_orders     purchase_orders?      @relation(fields: [purchase_order_id], references: [id])
+  customers           customers             @relation(fields: [customer_id], references: [id])
+  invoice_lines       invoice_lines[]
+  payment_allocations payment_allocations[]
+
+  @@schema("public")
+}
+
+model invoice_lines {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id      String   @db.Uuid
+  invoice_id  String   @db.Uuid
+  item_id     String?  @db.Uuid
+  description String
+  qty         Decimal  @db.Decimal(18, 2)
+  unit_price  Decimal  @db.Decimal(18, 2)
+  tax_code_id String?  @db.Uuid
+  line_total  Decimal  @db.Decimal(18, 2)
+  is_service  Boolean? @default(false)
+
+  invoices  invoices   @relation(fields: [invoice_id], references: [id], onDelete: Cascade)
+  items     items?     @relation(fields: [item_id], references: [id])
+  tax_codes tax_codes? @relation(fields: [tax_code_id], references: [id])
+
+  @@schema("public")
+}
+
+model payments {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id         String   @db.Uuid
+  payment_number String
+  payment_date   DateTime
+  amount         Decimal  @db.Decimal(18, 4)
+  method         String?
+  reference      String?
+  notes          String?
+  created_at     DateTime @default(now())
+
+  orgs                orgs                  @relation(fields: [org_id], references: [id])
+  payment_allocations payment_allocations[]
+
+  @@schema("public")
+}
+
+model payment_allocations {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id     String   @db.Uuid
+  payment_id String   @db.Uuid
+  invoice_id String   @db.Uuid
+  amount     Decimal  @db.Decimal(18, 4)
+  created_at DateTime @default(now())
+
+  payments payments @relation(fields: [payment_id], references: [id], onDelete: Cascade)
+  invoices invoices @relation(fields: [invoice_id], references: [id])
+
+  @@schema("public")
+}
+
+model inventory_transactions {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id       String   @db.Uuid
+  item_id      String   @db.Uuid
+  warehouse_id String   @db.Uuid
+  trx_type     trx_type
+  ref_table    String?
+  ref_id       String?  @db.Uuid
+  qty          Decimal  @db.Decimal(18, 4)
+  unit_cost    Decimal  @default(0) @db.Decimal(18, 4)
+  created_at   DateTime @default(now())
+
+  items      items      @relation(fields: [item_id], references: [id])
+  warehouses warehouses @relation(fields: [warehouse_id], references: [id])
+
+  @@schema("public")
+}
+
+model reservations {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id       String   @db.Uuid
+  doc_type     String
+  doc_id       String   @db.Uuid
+  item_id      String   @db.Uuid
+  qty          Decimal  @db.Decimal(18, 4)
+  warehouse_id String   @db.Uuid
+  created_at   DateTime @default(now())
+
+  orgs       orgs       @relation(fields: [org_id], references: [id])
+  items      items      @relation(fields: [item_id], references: [id])
+  warehouses warehouses @relation(fields: [warehouse_id], references: [id])
+
+  @@schema("public")
+}
+
+model gl_accounts {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id       String   @db.Uuid
+  account_code String
+  account_name String
+  account_type String
+  parent_id    String?  @db.Uuid
+  created_at   DateTime @default(now())
+
+  orgs             orgs               @relation(fields: [org_id], references: [id])
+  parent           gl_accounts?       @relation("AccountHierarchy", fields: [parent_id], references: [id])
+  children         gl_accounts[]      @relation("AccountHierarchy")
+  journal_lines    journal_lines[]
+  account_settings account_settings[]
+
+  @@unique([org_id, account_code])
+  @@schema("public")
+}
+
+model journal_entries {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id     String    @db.Uuid
+  memo       String?
+  posted_at  DateTime?
+  created_at DateTime  @default(now())
+
+  orgs          orgs            @relation(fields: [org_id], references: [id])
+  journal_lines journal_lines[]
+
+  @@schema("public")
+}
+
+model journal_lines {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id        String   @db.Uuid
+  entry_id      String   @db.Uuid
+  gl_account_id String   @db.Uuid
+  dr            Decimal  @default(0) @db.Decimal(18, 4)
+  cr            Decimal  @default(0) @db.Decimal(18, 4)
+  created_at    DateTime @default(now())
+
+  journal_entries journal_entries @relation(fields: [entry_id], references: [id], onDelete: Cascade)
+  gl_accounts     gl_accounts     @relation(fields: [gl_account_id], references: [id])
+
+  @@schema("public")
+}
+
+model cashflow_entries {
+  id               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id           String          @db.Uuid
+  entry_number     String
+  entry_date       DateTime        @db.Date
+  planned_date     DateTime?       @db.Date
+  category         String?
+  reference_type   String?
+  reference_id     String?         @db.Uuid
+  description      String?
+  amount           Decimal
+  payment_method   String?
+  type             cashflow_type
+  status           cashflow_status @default(planned)
+  notes            String?
+  created_by       String          @db.Uuid
+  created_at       DateTime        @default(now())
+  updated_at       DateTime        @default(now())
+
+  actual_date      DateTime?       @db.Date
+
+  orgs            orgs         @relation(fields: [org_id], references: [id])
+  created_by_user public_users @relation("CashflowCreatedBy", fields: [created_by], references: [id])
+
+  @@schema("public")
+}
+
+model expense_types {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id     String   @db.Uuid
+  name       String
+  code       String?
+  created_at DateTime @default(now())
+
+  orgs              orgs                @relation(fields: [org_id], references: [id])
+  delivery_expenses delivery_expenses[]
+
+  @@schema("public")
+}
+
+model delivery_expenses {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id            String   @db.Uuid
+  delivery_order_id String   @db.Uuid
+  expense_type_id   String   @db.Uuid
+  amount            Decimal  @db.Decimal(18, 4)
+  notes             String?
+  created_at        DateTime @default(now())
+
+  delivery_orders delivery_orders @relation(fields: [delivery_order_id], references: [id], onDelete: Cascade)
+  expense_types   expense_types   @relation(fields: [expense_type_id], references: [id])
+
+  @@schema("public")
+}
+
+model account_settings {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id        String   @db.Uuid
+  setting_key   String
+  gl_account_id String   @db.Uuid
+  created_at    DateTime @default(now())
+
+  orgs        orgs        @relation(fields: [org_id], references: [id])
+  gl_accounts gl_accounts @relation(fields: [gl_account_id], references: [id])
+
+  @@unique([org_id, setting_key])
+  @@schema("public")
+}
+
+model audit_logs {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id      String   @db.Uuid
+  user_id     String?  @db.Uuid
+  action      String
+  entity_type String
+  entity_id   String?  @db.Uuid
+  old_data    Json?
+  new_data    Json?
+  created_at  DateTime @default(now())
+
+  orgs orgs @relation(fields: [org_id], references: [id])
+
+  @@schema("public")
+}

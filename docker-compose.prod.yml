@@ -1,0 +1,52 @@
+services:
+  db:
+    image: postgres:15
+    container_name: partflow-db
+    environment:
+      POSTGRES_USER: partflow
+      POSTGRES_PASSWORD: partflow
+      POSTGRES_DB: partflow
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U partflow -d partflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+      target: prod
+    container_name: partflow-api
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://partflow:partflow@db:5432/partflow?schema=public
+      JWT_ACCESS_SECRET: change-me
+      JWT_REFRESH_SECRET: change-me
+      JWT_ACCESS_TTL: 900s
+      JWT_REFRESH_TTL: 7d
+      CORS_ORIGINS: http://localhost:8080
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        VITE_API_URL: /api
+    container_name: partflow-web
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+volumes:
+  pgdata:

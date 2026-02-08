@@ -1,0 +1,64 @@
+services:
+  db:
+    image: postgres:15
+    container_name: partflow-db-dev
+    environment:
+      POSTGRES_USER: partflow
+      POSTGRES_PASSWORD: partflow
+      POSTGRES_DB: partflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+      - ./docker/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U partflow -d partflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+      target: dev
+    container_name: partflow-api-dev
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: postgresql://partflow:partflow@db:5432/partflow?schema=public
+      JWT_ACCESS_SECRET: dev-access-secret
+      JWT_REFRESH_SECRET: dev-refresh-secret
+      JWT_ACCESS_TTL: 900s
+      JWT_REFRESH_TTL: 7d
+      CORS_ORIGINS: http://localhost:5173
+    ports:
+      - "3001:3001"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./apps/api:/app
+      - /app/node_modules
+    command: npm run start:dev
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      target: dev
+    container_name: partflow-web-dev
+    environment:
+      VITE_API_URL: http://localhost:3001/api
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: >
+      sh -c "if [ ! -f node_modules/@rollup/rollup-linux-x64-gnu/package.json ]; then npm install --legacy-peer-deps && npm install @rollup/rollup-linux-x64-gnu --legacy-peer-deps; fi && npm run dev -- --host 0.0.0.0 --port 5173"
+
+volumes:
+  pgdata_dev:
